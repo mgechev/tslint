@@ -34,7 +34,7 @@ import { findFormatter } from "./formatterLoader";
 import { ILinterOptions, LintResult } from "./index";
 import { IFormatter } from "./language/formatter/formatter";
 import { createLanguageService, wrapProgram } from "./language/languageServiceHost";
-import { Fix, IRule, RuleFailure } from "./language/rule/rule";
+import { Fix, IRule, RuleFailure } from './language/rule/rule';
 import { TypedRule } from "./language/rule/typedRule";
 import * as utils from "./language/utils";
 import { loadRules } from "./ruleLoader";
@@ -99,7 +99,7 @@ class Linter {
         }
     }
 
-    public lint(fileName: string, source: string, configuration: IConfigurationFile = DEFAULT_CONFIG): void {
+        public lint(fileName: string, source: string, configuration: IConfigurationFile = DEFAULT_CONFIG): void {
         let sourceFile = this.getSourceFile(fileName, source);
         const isJs = /\.jsx?$/i.test(fileName);
 
@@ -110,16 +110,8 @@ class Linter {
         if (this.options.fix) {
             for (const rule of enabledRules) {
                 const ruleFailures = this.applyRule(rule, sourceFile);
-                const fixes = ruleFailures.map((f) => f.getFix()).filter((f): f is Fix => !!f) as Fix[];
-                source = fs.readFileSync(fileName, { encoding: "utf-8" });
-                if (fixes.length > 0) {
-                    this.fixes = this.fixes.concat(ruleFailures);
-                    source = Fix.applyAll(source, fixes);
-                    fs.writeFileSync(fileName, source, { encoding: "utf-8" });
-
-                    // reload AST if file is modified
-                    sourceFile = this.getSourceFile(fileName, source);
-                }
+                source = this.applyFixes(fileName, source, ruleFailures);
+                sourceFile = this.getSourceFile(fileName, source);
                 fileFailures = fileFailures.concat(ruleFailures);
             }
             hasLinterRun = true;
@@ -136,6 +128,18 @@ class Linter {
             }
         }
         this.failures = this.failures.concat(fileFailures);
+
+        // add rule severity to failures
+        // const ruleSeverityMap = new Map(enabledRules.map((rule) => {
+        //     return [rule.getOptions().ruleName, rule.getOptions().ruleSeverity] as [string, RuleSeverity];
+        // }));
+        // for (const failure of this.failures) {
+        //     const severity = ruleSeverityMap.get(failure.getRuleName());
+        //     if (severity === undefined) {
+        //         throw new Error(`Severity for rule '${failure.getRuleName()} not found`);
+        //     }
+        //     // failure.setRuleSeverity(severity);
+        // }
     }
 
     public getResult(): LintResult {
@@ -159,6 +163,38 @@ class Linter {
             format: formatterName,
             output,
         };
+    }
+
+    protected applyFixes(fileName: string, source: string, ruleFailures: RuleFailure[]) {
+      let sourceFile = this.getSourceFile(fileName, source);
+
+      const fixesPerFile: {[file: string]: Fix[]} = ruleFailures
+          .reduce((accum: {[file: string]: Fix[]}, c) => {
+              const currentFileName = c.getFileName();
+              const fix = c.getFix();
+              if (fix) {
+                  accum[currentFileName] = accum[currentFileName] || [];
+                  accum[currentFileName].push(fix);
+              }
+              return accum;
+          }, {});
+
+      const hasFixes = Object.keys(fixesPerFile).length > 0;
+
+      if (hasFixes) {
+          this.fixes = this.fixes.concat(ruleFailures);
+          Object.keys(fixesPerFile).forEach((currentFileName: string) => {
+              const fixesForFile = fixesPerFile[currentFileName];
+              source = fs.readFileSync(currentFileName, { encoding: "utf-8" });
+              source = Fix.applyAll(source, fixesForFile);
+              fs.writeFileSync(currentFileName, source, { encoding: "utf-8" });
+              // reload AST if file is modified
+              sourceFile = this.getSourceFile(currentFileName, source);
+          });
+
+      }
+
+      return source;
     }
 
     private applyRule(rule: IRule, sourceFile: ts.SourceFile) {
@@ -230,3 +266,4 @@ class Linter {
 namespace Linter { }
 
 export = Linter;
+
