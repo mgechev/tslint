@@ -28,7 +28,7 @@ declare class Linter {
     constructor(options: ILinterOptions, program?: ts.Program);
     lint(fileName: string, source: string, configuration?: IConfigurationFile): void;
     getResult(): LintResult;
-    protected applyFixes(fileName: string, source: string, ruleFailures: RuleFailure[]): string;
+    protected applyFixes(ruleFailures: RuleFailure[]): void;
     private applyRule(rule, sourceFile);
     private getEnabledRules(sourceFile, configuration, isJs);
     private getSourceFile(fileName, source);

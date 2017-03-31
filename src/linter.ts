@@ -110,7 +110,7 @@ class Linter {
         if (this.options.fix) {
             for (const rule of enabledRules) {
                 const ruleFailures = this.applyRule(rule, sourceFile);
-                source = this.applyFixes(fileName, source, ruleFailures);
+                this.applyFixes(ruleFailures);
                 sourceFile = this.getSourceFile(fileName, source);
                 fileFailures = fileFailures.concat(ruleFailures);
             }
@@ -165,9 +165,7 @@ class Linter {
         };
     }
 
-    protected applyFixes(fileName: string, source: string, ruleFailures: RuleFailure[]) {
-      let sourceFile = this.getSourceFile(fileName, source);
-
+    protected applyFixes(ruleFailures: RuleFailure[]) {
       const fixesPerFile: {[file: string]: Fix[]} = ruleFailures
           .reduce((accum: {[file: string]: Fix[]}, c) => {
               const currentFileName = c.getFileName();
@@ -185,16 +183,12 @@ class Linter {
           this.fixes = this.fixes.concat(ruleFailures);
           Object.keys(fixesPerFile).forEach((currentFileName: string) => {
               const fixesForFile = fixesPerFile[currentFileName];
-              source = fs.readFileSync(currentFileName, { encoding: "utf-8" });
+              let source = fs.readFileSync(currentFileName, { encoding: "utf-8" });
               source = Fix.applyAll(source, fixesForFile);
               fs.writeFileSync(currentFileName, source, { encoding: "utf-8" });
-              // reload AST if file is modified
-              sourceFile = this.getSourceFile(currentFileName, source);
           });
 
       }
-
-      return source;
     }
 
     private applyRule(rule: IRule, sourceFile: ts.SourceFile) {
