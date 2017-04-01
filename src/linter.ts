@@ -110,7 +110,7 @@ class Linter {
         if (this.options.fix) {
             for (const rule of enabledRules) {
                 const ruleFailures = this.applyRule(rule, sourceFile);
-                this.applyFixes(ruleFailures);
+                source = this.applyFixes(fileName, source, ruleFailures);
                 sourceFile = this.getSourceFile(fileName, source);
                 fileFailures = fileFailures.concat(ruleFailures);
             }
@@ -165,7 +165,9 @@ class Linter {
         };
     }
 
-    protected applyFixes(ruleFailures: RuleFailure[]) {
+    // Applies fixes to the files where the failures are reported.
+    // Returns the content of the source file which AST needs to be reloaded.
+    protected applyFixes(sourceFilePath: string, sourceContent: string, ruleFailures: RuleFailure[]) {
       const fixesPerFile: {[file: string]: Fix[]} = ruleFailures
           .reduce((accum: {[file: string]: Fix[]}, c) => {
               const currentFileName = c.getFileName();
@@ -178,6 +180,7 @@ class Linter {
           }, {});
 
       const hasFixes = Object.keys(fixesPerFile).length > 0;
+      let result = sourceContent;
 
       if (hasFixes) {
           this.fixes = this.fixes.concat(ruleFailures);
@@ -186,9 +189,12 @@ class Linter {
               let source = fs.readFileSync(currentFileName, { encoding: "utf-8" });
               source = Fix.applyAll(source, fixesForFile);
               fs.writeFileSync(currentFileName, source, { encoding: "utf-8" });
+              if (sourceFilePath === currentFileName) {
+                  result = source;
+              }
           });
-
       }
+      return result;
     }
 
     private applyRule(rule: IRule, sourceFile: ts.SourceFile) {
@@ -260,4 +266,3 @@ class Linter {
 namespace Linter { }
 
 export = Linter;
-
